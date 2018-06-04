@@ -124,7 +124,6 @@ def calc_muon_detector_intersec_points(source, radius, time_steps):
         z_position_current = muon_event.z_position_init
 
         distance_to_det_center = distance_to_center(x_position_current, y_position_current, z_position_current)
-
         while z_position_current > -23000:
             muon_in_detector = is_muon_in_detector(distance_to_det_center, radius)
             x_position_current = x_position_current + time_steps * x_velocity
@@ -162,8 +161,10 @@ def calc_muon_detector_intersec_points(source, radius, time_steps):
                 muon_out.z = z_position_current
 
                 muon_out.phi = math.atan2(y_position_current, x_position_current)
-                muon_out.theta = math.acos(-z_position_current/radius)
-                muon_out.theta2 = math.acos(-z_position_current/radius) - (math.pi/2)
+                cos_val = -z_position_current/radius
+                np.clip(cos_val, -1, 1)
+                muon_out.theta = math.acos(cos_val)
+                muon_out.theta2 = math.acos(cos_val) - (math.pi/2)
 
                 muon_out.phi_hammer_aitoff = (math.sqrt(8) * math.cos(muon_out.theta) * math.sin(muon_out.phi / 2)) / \
                           (math.sqrt(1 + math.cos(muon_out.theta) * math.cos(muon_out.phi / 2)))
@@ -173,7 +174,21 @@ def calc_muon_detector_intersec_points(source, radius, time_steps):
 
                 muon_out.intersec_time = time_current
 
+                track_length_theo = math.sqrt(pow(muon_out.x - muon_in.x, 2)
+                                              + pow(muon_out.y - muon_in.y, 2)
+                                              + pow(muon_out.z - muon_in.z, 2))
+
+                # if abs(track_length_theo - muon_event.scint_track_length) < 0.9:
+
+                e_loss_total = muon_event.e_loss_rock \
+                               + muon_event.e_loss_Veto \
+                               + muon_event.e_loss_cd_water \
+                               + muon_event.e_loss_acrylic \
+                               + muon_event.e_loss_steel \
+                               + muon_event.e_loss_scint
+
                 returnarray.append(muon_out)
+
     return returnarray
 
 
@@ -182,7 +197,7 @@ def is_muon_stopping(muon_event):
     y_position_current = muon_event.y_position_final
     z_position_current = muon_event.z_position_final
 
-    if PointVecDist.VectorLength(x_position_current, y_position_current, z_position_current) > 0:
+    if PointVecDist.VectorLength(x_position_current, y_position_current, z_position_current) > 17600:
         return False
     else:
         return True
@@ -216,6 +231,8 @@ class PMTPositions:
         self.phi_position = []
         self.theta_position = []
         self.theta_position2 = []
+        self.phi_shifted = []
+        self.theta_shifted = []
         self.phi_hammer_aitov = []
         self.theta_hammer_aitov = []
         self.sector_list_id = []
@@ -248,6 +265,12 @@ class PMTPositions:
     """-90deg to 90deg"""
     def add_theta_position2(self, value):
         self.theta_position2.append(value)
+
+    def add_phi_shifted(self, value):
+        self.phi_shifted.append(value)
+
+    def add_theta_shifted(self, value):
+        self.theta_shifted.append(value)
 
     def add_phi_hammer_aitov(self, value):
         self.phi_hammer_aitov.append((value))
@@ -288,6 +311,21 @@ def calc_pmt_positions(inpath, x_sector_num, y_sector_num):
         theta_position = math.acos(- event.__getattr__("z")/radius)
         return_class.add_theta_position(theta_position)
         return_class.add_theta_position2(theta_position - (math.pi/2))
+
+        """rotation"""
+        phi_shifted = math.atan2(event.__getattr__("y"), event.__getattr__("x"))
+        if phi_shifted > 0:
+            phi_shifted -= math.pi
+        else:
+            phi_shifted += math.pi
+        return_class.add_phi_shifted(phi_shifted)
+
+        theta_shifted = math.asin(event.__getattr__("z")/radius)
+        if theta_shifted > 0:
+            theta_shifted -= math.pi/2
+        else:
+            theta_shifted += math.pi/2
+        return_class.add_theta_shifted(theta_shifted)
 
         x_sector = int((phi_position + math.pi) / 2.01 / math.pi * x_sector_num)
         y_sector = int(theta_position/math.pi * y_sector_num)
