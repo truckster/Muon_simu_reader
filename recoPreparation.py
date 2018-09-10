@@ -103,92 +103,101 @@ def calc_muon_detector_intersec_points(source, radius, time_steps):
     c = 299792548000
 
     for index, muon_event in enumerate(muon_data):
+        muon_event_array = []
         muon_in = MuonIntersecPoint()
         muon_out = MuonIntersecPoint()
+        """Track-Sphere intersection points"""
+        point_array = PointVecDist.calc_line_sphere_intersect_points(muon_event, radius)
+        if len(point_array) == 2:
+            muon_in.event = index
+            muon_out.event = index
 
-        muon_in.event = index
-        muon_out.event = index
+            time_current = 0
 
-        time_current = 0
+            total_momentum = math.sqrt(pow(muon_event.x_momentum_init, 2)
+                                       + pow(muon_event.y_momentum_init, 2)
+                                       + pow(muon_event.z_momentum_init, 2))
 
-        total_momentum = math.sqrt(pow(muon_event.x_momentum_init, 2)
-                                   + pow(muon_event.y_momentum_init, 2)
-                                   + pow(muon_event.z_momentum_init, 2))
+            x_velocity = muon_event.x_momentum_init / math.sqrt(pow(muon_mass, 2) + total_momentum**2) * c
+            y_velocity = muon_event.y_momentum_init / math.sqrt(pow(muon_mass, 2) + total_momentum**2) * c
+            z_velocity = muon_event.z_momentum_init / math.sqrt(pow(muon_mass, 2) + total_momentum**2) * c
 
-        x_velocity = muon_event.x_momentum_init / math.sqrt(pow(muon_mass, 2) + total_momentum**2) * c
-        y_velocity = muon_event.y_momentum_init / math.sqrt(pow(muon_mass, 2) + total_momentum**2) * c
-        z_velocity = muon_event.z_momentum_init / math.sqrt(pow(muon_mass, 2) + total_momentum**2) * c
+            x_position_current = muon_event.x_position_init
+            y_position_current = muon_event.y_position_init
+            z_position_current = muon_event.z_position_init
 
-        x_position_current = muon_event.x_position_init
-        y_position_current = muon_event.y_position_init
-        z_position_current = muon_event.z_position_init
-
-        distance_to_det_center = distance_to_center(x_position_current, y_position_current, z_position_current)
-        while z_position_current > -23000:
-            muon_in_detector = is_muon_in_detector(distance_to_det_center, radius)
-            x_position_current = x_position_current + time_steps * x_velocity
-            y_position_current = y_position_current + time_steps * y_velocity
-            z_position_current = z_position_current + time_steps * z_velocity
-
-            time_current += time_steps
             distance_to_det_center = distance_to_center(x_position_current, y_position_current, z_position_current)
-            muon_in_detector_second = is_muon_in_detector(distance_to_det_center, radius)
+            while z_position_current > -23000:
+                muon_in_detector = is_muon_in_detector(distance_to_det_center, radius)
+                x_position_current = x_position_current + time_steps * x_velocity
+                y_position_current = y_position_current + time_steps * y_velocity
+                z_position_current = z_position_current + time_steps * z_velocity
 
-            if muon_in_detector is False and muon_in_detector_second is True:
-                muon_in.enters = True
-                muon_in.x = x_position_current
-                muon_in.y = y_position_current
-                muon_in.z = z_position_current
+                time_current += time_steps
+                distance_to_det_center = distance_to_center(x_position_current, y_position_current, z_position_current)
+                muon_in_detector_second = is_muon_in_detector(distance_to_det_center, radius)
 
-                muon_in.phi = math.atan2(y_position_current, x_position_current)
-                muon_in.theta = math.acos(-z_position_current/radius)
-                muon_in.theta2 = math.acos(-z_position_current/radius) - (math.pi/2)
+                if muon_in_detector is False and muon_in_detector_second is True:
+                    muon_in.enters = True
+                    if point_array[0].z > point_array[1].z:
+                        muon_in.x = point_array[0].x
+                        muon_in.y = point_array[0].y
+                        muon_in.z = point_array[0].z
+                    else:
+                        muon_in.x = point_array[1].x
+                        muon_in.y = point_array[1].y
+                        muon_in.z = point_array[1].z
 
-                muon_in.phi_hammer_aitoff = (math.sqrt(8) * math.cos(muon_out.theta) * math.sin(muon_out.phi / 2)) / \
-                                             (math.sqrt(1 + math.cos(muon_out.theta) * math.cos(muon_out.phi / 2)))
+                    muon_in.phi = math.atan2(muon_in.y, muon_in.x)
+                    muon_in.theta = math.acos(-muon_in.z/radius)
+                    muon_in.theta2 = math.acos(-muon_in.z/radius) - (math.pi/2)
 
-                muon_in.theta_hammer_aitoff = (math.sqrt(2) * math.sin(muon_out.theta)) / \
-                                               (math.sqrt(1 + math.cos(muon_out.theta) * math.cos(muon_out.phi / 2)))
+                    muon_in.phi_hammer_aitoff = (math.sqrt(8) * math.cos(muon_in.theta) * math.sin(muon_in.phi / 2)) / \
+                                                (math.sqrt(1 + math.cos(muon_in.theta) * math.cos(muon_in.phi / 2)))
 
-                muon_in.intersec_time = time_current
+                    muon_in.theta_hammer_aitoff = (math.sqrt(2) * math.sin(muon_in.theta)) / \
+                                                  (math.sqrt(1 + math.cos(muon_in.theta) * math.cos(muon_in.phi / 2)))
 
-                returnarray.append(muon_in)
+                    muon_in.intersec_time = time_current
 
-            if muon_in_detector is True and muon_in_detector_second is False and is_muon_stopping(muon_event) is False:
-                muon_out.leaves = True
-                muon_out.x = x_position_current
-                muon_out.y = y_position_current
-                muon_out.z = z_position_current
+                    muon_event_array.append(muon_in)
 
-                muon_out.phi = math.atan2(y_position_current, x_position_current)
-                cos_val = -z_position_current/radius
-                np.clip(cos_val, -1, 1)
-                muon_out.theta = math.acos(cos_val)
-                muon_out.theta2 = math.acos(cos_val) - (math.pi/2)
+                if muon_in_detector is True and muon_in_detector_second is False and is_muon_stopping(muon_event) is False:
+                    muon_out.leaves = True
+                    muon_out.x = x_position_current
+                    muon_out.y = y_position_current
+                    muon_out.z = z_position_current
 
-                muon_out.phi_hammer_aitoff = (math.sqrt(8) * math.cos(muon_out.theta) * math.sin(muon_out.phi / 2)) / \
-                          (math.sqrt(1 + math.cos(muon_out.theta) * math.cos(muon_out.phi / 2)))
+                    if point_array[1].z > point_array[0].z:
+                        muon_out.x = point_array[0].x
+                        muon_out.y = point_array[0].y
+                        muon_out.z = point_array[0].z
+                    else:
+                        muon_out.x = point_array[1].x
+                        muon_out.y = point_array[1].y
+                        muon_out.z = point_array[1].z
 
-                muon_out.theta_hammer_aitoff = (math.sqrt(2) * math.sin(muon_out.theta)) / \
-                            (math.sqrt(1 + math.cos(muon_out.theta) * math.cos(muon_out.phi / 2)))
+                    muon_out.phi = math.atan2(muon_out.y, muon_out.x)
+                    cos_val = -muon_out.z/radius
+                    if cos_val < -1:
+                        cos_val = -1
+                    if cos_val > 1:
+                        cos_val = 1
+                    muon_out.theta = math.acos(cos_val)
+                    muon_out.theta2 = math.acos(cos_val) - (math.pi/2)
 
-                muon_out.intersec_time = time_current
+                    muon_out.phi_hammer_aitoff = (math.sqrt(8) * math.cos(muon_out.theta) * math.sin(muon_out.phi / 2)) / \
+                              (math.sqrt(1 + math.cos(muon_out.theta) * math.cos(muon_out.phi / 2)))
 
-                track_length_theo = math.sqrt(pow(muon_out.x - muon_in.x, 2)
-                                              + pow(muon_out.y - muon_in.y, 2)
-                                              + pow(muon_out.z - muon_in.z, 2))
+                    muon_out.theta_hammer_aitoff = (math.sqrt(2) * math.sin(muon_out.theta)) / \
+                                (math.sqrt(1 + math.cos(muon_out.theta) * math.cos(muon_out.phi / 2)))
 
-                # if abs(track_length_theo - muon_event.scint_track_length) < 0.9:
+                    muon_out.intersec_time = time_current
 
-                e_loss_total = muon_event.e_loss_rock \
-                               + muon_event.e_loss_Veto \
-                               + muon_event.e_loss_cd_water \
-                               + muon_event.e_loss_acrylic \
-                               + muon_event.e_loss_steel \
-                               + muon_event.e_loss_scint
-
-                returnarray.append(muon_out)
-
+                    muon_event_array.append(muon_out)
+            returnarray.append(muon_event_array)
+        else:
+            print("Bad track (not 2 intersection points found)")
     return returnarray
 
 
@@ -203,13 +212,13 @@ def is_muon_stopping(muon_event):
         return True
 
 
-def create_output_path(outpath, file, extension,  inpath):
+def create_output_path(outpath, run, file, extension,  inpath):
     try:
         os.chdir(outpath)
     except:
         os.makedirs(outpath + "/")
     os.chdir(outpath)
-    output_path2 = outpath + str(file) + extension
+    output_path2 = outpath + run + "/" + run + "-" + str(file) + extension
     if os.path.isdir(output_path2) is False:
         statusAlert.processStatus("Create output path")
         os.makedirs(output_path2)
@@ -273,10 +282,10 @@ class PMTPositions:
         self.theta_shifted.append(value)
 
     def add_phi_hammer_aitov(self, value):
-        self.phi_hammer_aitov.append((value))
+        self.phi_hammer_aitov.append(value)
 
     def add_theta_hammer_aitov(self, value):
-        self.theta_hammer_aitov.append((value))
+        self.theta_hammer_aitov.append(value)
 
     def add_x_sector(self, value):
         self.is_x_sector.append(value)
@@ -309,8 +318,9 @@ def calc_pmt_positions(inpath, x_sector_num, y_sector_num):
 
         radius = PointVecDist.VectorLength(event.__getattr__("x"), event.__getattr__("y"), event.__getattr__("z"))
         theta_position = math.acos(- event.__getattr__("z")/radius)
+        theta_position2 = math.asin(event.__getattr__("z")/radius)
         return_class.add_theta_position(theta_position)
-        return_class.add_theta_position2(theta_position - (math.pi/2))
+        return_class.add_theta_position2(theta_position2)
 
         """rotation"""
         phi_shifted = math.atan2(event.__getattr__("y"), event.__getattr__("x"))
@@ -320,7 +330,7 @@ def calc_pmt_positions(inpath, x_sector_num, y_sector_num):
             phi_shifted += math.pi
         return_class.add_phi_shifted(phi_shifted)
 
-        theta_shifted = math.asin(event.__getattr__("z")/radius)
+        theta_shifted = math.acos(- event.__getattr__("z")/radius)  - (math.pi/2)
         if theta_shifted > 0:
             theta_shifted -= math.pi/2
         else:
@@ -391,3 +401,47 @@ def MC_truth_writer(muon_points, output_path, file, time_cut):
     r_file.close()
 
     return positions
+
+
+def hit_time_drawer(array, outdir):
+    n, bins, patches = plt.hist(array, bins=200, range=(0, 1300))
+
+    plt.rc('text', usetex=True)
+    plt.rc('font', family='serif')
+
+    plt.xlabel("Hit Time")
+    plt.ylabel("In event")
+    plt.grid(True)
+
+    plt.savefig(outdir + "hit_time.pdf", bbox_inches='tight')
+    plt.savefig(outdir + "hit_time.png", bbox_inches='tight')
+
+    plt.close()
+
+
+def hit_pmt_drawer(array, outdir):
+    n, bins, patches = plt.hist(array, bins=18000, range=(0, 18000))
+
+    plt.rc('text', usetex=True)
+    plt.rc('font', family='serif')
+
+    plt.xlabel("Hit PMTs")
+    plt.ylabel("In event")
+    plt.grid(True)
+
+    plt.savefig(outdir + "hit_pmt.pdf", bbox_inches='tight')
+    plt.savefig(outdir + "hit_pmt.png", bbox_inches='tight')
+
+    plt.close()
+
+
+def hit_time_pmt_scatter(time_array, pmt_array, outdir):
+    fig = plt.figure(num=None, figsize=(20, 10))
+    plt.scatter(time_array, pmt_array, marker="o", s=0.5)
+    plt.xlabel("Hit time")
+    plt.ylabel("Hit PMT")
+
+    plt.xlim(0, 500)
+
+    plt.savefig(outdir + "pmt_time_scatter.png", bbox_inches='tight')
+    plt.close()
